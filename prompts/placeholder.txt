@@ -1,0 +1,1 @@
+This folder stores prompt templates and instructions.

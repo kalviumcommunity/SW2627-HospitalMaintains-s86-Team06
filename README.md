@@ -1,5 +1,30 @@
 # 🏥 AI-Powered Clinical Knowledge & Decision Support System (CKDSS)
 
+## Environment setup and clean-run verification
+
+This repository uses Python 3.11 for a reproducible local environment because the Chroma dependency is not reliably compatible with Python 3.12 on Windows.
+
+### Quick start
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python src/healthcheck.py
+```
+
+### Verified clean run
+
+The project was verified from a fresh setup on 2026-08-17 by creating a new virtual environment, installing the pinned dependency set, copying the sample environment file, and running the health check successfully.
+
+Expected output:
+
+```text
+Health check passed: dependencies imported and environment loaded.
+```
+
 ## Part 1 — Business Problem Statement
 
 ### 🎯 Section 1 · Specific · Quantified · Bounded
