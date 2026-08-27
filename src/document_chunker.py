@@ -170,8 +170,7 @@ def chunk_document(
 
     chunk_objects = []
     for idx, chunk_text in enumerate(raw_chunks, 1):
-        chunk_objects.append(
-            {
+        chunk = {
                 "chunk_id": f"{source}_chunk_{idx}",
                 "source": source,
                 "chunk_index": idx,
@@ -179,7 +178,11 @@ def chunk_document(
                 "char_count": len(chunk_text),
                 "strategy": strategy,
             }
-        )
+        if doc.get("path"):
+            chunk["source_path"] = doc["path"]
+        if doc.get("format"):
+            chunk["format"] = doc["format"]
+        chunk_objects.append(chunk)
 
     return chunk_objects
 
