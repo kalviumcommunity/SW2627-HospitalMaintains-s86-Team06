@@ -1,0 +1,21 @@
+{
+  "data_directory": "C:\\Users\\karth\\OneDrive\\Desktop\\sw2\\SW2627-HospitalMaintains-s86-Team06\\data",
+  "strategy": "paragraph",
+  "total_source_documents": 1,
+  "successfully_ingested_documents": 0,
+  "total_chunks_created": 0,
+  "failure_count": 1,
+  "skipped_files": [
+    {
+      "source": ".gitkeep",
+      "path": "data\\.gitkeep",
+      "reason": "unsupported: ",
+      "category": "unsupported"
+    }
+  ],
+  "completeness_check": {
+    "passed": true,
+    "source_documents": 1,
+    "ingested_plus_failures": 1
+  }
+}
