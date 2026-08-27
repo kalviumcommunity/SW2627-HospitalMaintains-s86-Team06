@@ -25,6 +25,10 @@ Expected output:
 Health check passed: dependencies imported and environment loaded.
 ```
 
+### Contribution workflow
+
+Create a focused feature branch, run the health check, and open a pull request for review.
+
 ## Part 1 — Business Problem Statement
 
 ### 🎯 Section 1 · Specific · Quantified · Bounded
