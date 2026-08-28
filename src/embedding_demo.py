@@ -8,7 +8,7 @@ offline; it is not a replacement for a production embedding model.
 import json
 import math
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -35,6 +35,7 @@ SAMPLE_CORPUS = [
 ]
 
 SAMPLE_TEXTS = [chunk.text for chunk in SAMPLE_CORPUS]
+SAMPLE_QUERY = "What medication instructions should the patient follow?"
 
 # Deterministic semantic fixture for environments without API credentials.
 OFFLINE_VECTORS = [
@@ -42,6 +43,7 @@ OFFLINE_VECTORS = [
     [0.89, 0.10, 0.03, 0.11, 0.05, 0.02, 0.01, 0.03],
     [0.04, 0.02, 0.91, 0.03, 0.08, 0.02, 0.01, 0.05],
 ]
+OFFLINE_QUERY_VECTOR = [0.90, 0.09, 0.02, 0.11, 0.04, 0.03, 0.01, 0.02]
 
 
 def cosine_similarity(first: Sequence[float], second: Sequence[float]) -> float:
@@ -67,7 +69,9 @@ def generate_embeddings(
         return f"OpenAI {model}", vectors
 
     if list(texts) != SAMPLE_TEXTS:
-        raise ValueError("The offline fixture only supports the built-in sample texts")
+        if list(texts) == [SAMPLE_QUERY]:
+            return "offline semantic fixture", [OFFLINE_QUERY_VECTOR[:]]
+        raise ValueError("The offline fixture only supports the built-in sample texts and query")
     return "offline semantic fixture", [vector[:] for vector in OFFLINE_VECTORS]
 
 
@@ -83,13 +87,38 @@ def store_embeddings(
     ]
 
 
-def build_report(provider: str, corpus: Sequence[TextChunk], vectors: Sequence[Sequence[float]]) -> str:
+def rank_chunks(
+    query_embedding: Sequence[float], records: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Rank stored chunks by cosine similarity to a query embedding."""
+    ranked = [
+        {
+            "score": cosine_similarity(query_embedding, record["embedding"]),
+            "text": record["text"],
+            "metadata": record["metadata"],
+        }
+        for record in records
+    ]
+    return sorted(ranked, key=lambda result: result["score"], reverse=True)
+
+
+def build_report(
+    provider: str,
+    corpus: Sequence[TextChunk],
+    vectors: Sequence[Sequence[float]],
+    query: str = SAMPLE_QUERY,
+    query_embedding: Sequence[float] | None = None,
+) -> str:
     """Build the committed, human-readable demonstration report."""
     dimensions = [len(vector) for vector in vectors]
     if not dimensions or len(set(dimensions)) != 1:
         raise ValueError("Every sample text must produce a vector of the same length")
 
     stored_records = store_embeddings(corpus, vectors)
+    if query_embedding is None:
+        _, query_vectors = generate_embeddings([query])
+        query_embedding = query_vectors[0]
+    rankings = rank_chunks(query_embedding, stored_records)
     similar_score = cosine_similarity(vectors[0], vectors[1])
     unrelated_score = cosine_similarity(vectors[0], vectors[2])
     if similar_score <= unrelated_score:
@@ -124,6 +153,29 @@ def build_report(provider: str, corpus: Sequence[TextChunk], vectors: Sequence[S
             f"- Similar pair (samples 1 and 2): `{similar_score:.6f}`",
             f"- Unrelated pair (samples 1 and 3): `{unrelated_score:.6f}`",
             f"- Similar pair scores higher: `{similar_score > unrelated_score}`",
+            "",
+            "## Query ranking",
+            "",
+            f"Query: **{query}**",
+            "",
+            "Metric: cosine similarity, because it compares the direction of embedding vectors and is less "
+            "affected by their magnitude.",
+            "",
+        ]
+    )
+    for rank, result in enumerate(rankings, 1):
+        lines.extend(
+            [
+                f"{rank}. **Score:** `{result['score']:.6f}`",
+                f"   **Text:** {result['text']}",
+                f"   **Metadata:** `{json.dumps(result['metadata'], sort_keys=True)}`",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            f"Most similar: **{rankings[0]['text']}** (`{rankings[0]['score']:.6f}`)",
+            f"Least similar: **{rankings[-1]['text']}** (`{rankings[-1]['score']:.6f}`)",
             "",
             "## What vectors represent",
             "",
@@ -163,8 +215,12 @@ def main() -> None:
     provider, vectors = generate_embeddings(
         SAMPLE_TEXTS, client=client, model=embedding_model
     )
+    _, query_vectors = generate_embeddings(
+        [SAMPLE_QUERY], client=client, model=embedding_model
+    )
     validate_dimension(vectors, os.getenv("EMBEDDING_DIMENSION"))
-    report = build_report(provider, SAMPLE_CORPUS, vectors)
+    validate_dimension(query_vectors, os.getenv("EMBEDDING_DIMENSION"))
+    report = build_report(provider, SAMPLE_CORPUS, vectors, query_embedding=query_vectors[0])
     output_path = Path(os.getenv("EMBEDDING_OUTPUT", "outputs/embedding_demo.md"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
