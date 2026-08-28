@@ -1,17 +1,24 @@
 # Embedding Demonstration
 
 Provider: `offline semantic fixture`
+Chunks embedded: `3`
 Vector dimension: `8`
-All 3 sample texts have the same vector length: `True`
+All chunks have the same vector length: `True`
 
-## Sample vectors
+## Stored chunks and vectors
 
 - **Text:** The patient should take the prescribed medication with water.
-  **Vector:** `[0.91, 0.08, 0.02, 0.12, 0.04, 0.03, 0.01, 0.02]`
+  **Metadata:** `{"chunk_index": 1, "section": "Dosage", "source_document": "medication-guideline.pdf"}`
+  **Vector length:** `8`
+  **Vector values (first 5):** `[0.91, 0.08, 0.02, 0.12, 0.04]`
 - **Text:** Patients need to use their recommended medicine with water.
-  **Vector:** `[0.89, 0.1, 0.03, 0.11, 0.05, 0.02, 0.01, 0.03]`
+  **Metadata:** `{"chunk_index": 2, "section": "Administration", "source_document": "medication-guideline.pdf"}`
+  **Vector length:** `8`
+  **Vector values (first 5):** `[0.89, 0.1, 0.03, 0.11, 0.05]`
 - **Text:** The help desk can reset an employee password.
-  **Vector:** `[0.04, 0.02, 0.91, 0.03, 0.08, 0.02, 0.01, 0.05]`
+  **Metadata:** `{"chunk_index": 1, "section": "Account access", "source_document": "it-support-handbook.pdf"}`
+  **Vector length:** `8`
+  **Vector values (first 5):** `[0.04, 0.02, 0.91, 0.03, 0.08]`
 
 ## Cosine similarity
 
