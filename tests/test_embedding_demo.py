@@ -1,10 +1,12 @@
 from src.embedding_demo import (
     SAMPLE_CORPUS,
+    SAMPLE_QUERY,
     SAMPLE_TEXTS,
     build_report,
     cosine_similarity,
     generate_embeddings,
     store_embeddings,
+    rank_chunks,
 )
 
 
@@ -50,3 +52,16 @@ def test_report_contains_vectors_dimension_and_explanation():
     assert "Similar pair scores higher: `True`" in report
     assert "source_document" in report
     assert "not random IDs" in report
+
+
+def test_query_ranks_chunks_with_scores_and_metadata():
+    _, vectors = generate_embeddings(SAMPLE_TEXTS)
+    records = store_embeddings(SAMPLE_CORPUS, vectors)
+    _, query_vectors = generate_embeddings([SAMPLE_QUERY])
+
+    rankings = rank_chunks(query_vectors[0], records)
+
+    assert len(rankings) == 3
+    assert rankings[0]["metadata"]["section"] == "Dosage"
+    assert rankings[-1]["metadata"]["section"] == "Account access"
+    assert rankings[0]["score"] > rankings[-1]["score"]
