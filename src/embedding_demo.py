@@ -8,15 +8,33 @@ offline; it is not a replacement for a production embedding model.
 import json
 import math
 import os
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
 
-SAMPLE_TEXTS = [
-    "The patient should take the prescribed medication with water.",
-    "Patients need to use their recommended medicine with water.",
-    "The help desk can reset an employee password.",
+@dataclass(frozen=True)
+class TextChunk:
+    text: str
+    metadata: dict[str, Any]
+
+
+SAMPLE_CORPUS = [
+    TextChunk(
+        "The patient should take the prescribed medication with water.",
+        {"source_document": "medication-guideline.pdf", "chunk_index": 1, "section": "Dosage"},
+    ),
+    TextChunk(
+        "Patients need to use their recommended medicine with water.",
+        {"source_document": "medication-guideline.pdf", "chunk_index": 2, "section": "Administration"},
+    ),
+    TextChunk(
+        "The help desk can reset an employee password.",
+        {"source_document": "it-support-handbook.pdf", "chunk_index": 1, "section": "Account access"},
+    ),
 ]
+
+SAMPLE_TEXTS = [chunk.text for chunk in SAMPLE_CORPUS]
 
 # Deterministic semantic fixture for environments without API credentials.
 OFFLINE_VECTORS = [
@@ -38,10 +56,12 @@ def cosine_similarity(first: Sequence[float], second: Sequence[float]) -> float:
 
 
 def generate_embeddings(
-    texts: Sequence[str], client: Any | None = None, model: str = "text-embedding-3-small"
+    texts: Sequence[str], client: Any | None = None, model: str | None = None
 ) -> tuple[str, list[list[float]]]:
-    """Generate vectors through OpenAI when available, otherwise use the offline fixture."""
+    """Generate vectors through an embeddings API or the explicit offline fixture."""
     if client is not None:
+        if not model:
+            raise ValueError("An embedding model is required when using an embeddings API")
         response = client.embeddings.create(input=list(texts), model=model)
         vectors = [item.embedding for item in sorted(response.data, key=lambda item: item.index)]
         return f"OpenAI {model}", vectors
@@ -51,12 +71,25 @@ def generate_embeddings(
     return "offline semantic fixture", [vector[:] for vector in OFFLINE_VECTORS]
 
 
-def build_report(provider: str, texts: Sequence[str], vectors: Sequence[Sequence[float]]) -> str:
+def store_embeddings(
+    corpus: Sequence[TextChunk], vectors: Sequence[Sequence[float]]
+) -> list[dict[str, Any]]:
+    """Pair each source chunk and its metadata with its returned vector."""
+    if len(corpus) != len(vectors):
+        raise ValueError("Each source chunk must have exactly one embedding")
+    return [
+        {"text": chunk.text, "metadata": chunk.metadata, "embedding": list(vector)}
+        for chunk, vector in zip(corpus, vectors)
+    ]
+
+
+def build_report(provider: str, corpus: Sequence[TextChunk], vectors: Sequence[Sequence[float]]) -> str:
     """Build the committed, human-readable demonstration report."""
     dimensions = [len(vector) for vector in vectors]
     if not dimensions or len(set(dimensions)) != 1:
         raise ValueError("Every sample text must produce a vector of the same length")
 
+    stored_records = store_embeddings(corpus, vectors)
     similar_score = cosine_similarity(vectors[0], vectors[1])
     unrelated_score = cosine_similarity(vectors[0], vectors[2])
     if similar_score <= unrelated_score:
@@ -66,14 +99,23 @@ def build_report(provider: str, texts: Sequence[str], vectors: Sequence[Sequence
         "# Embedding Demonstration",
         "",
         f"Provider: `{provider}`",
+        f"Chunks embedded: `{len(stored_records)}`",
         f"Vector dimension: `{dimensions[0]}`",
-        f"All {len(vectors)} sample texts have the same vector length: `{len(set(dimensions)) == 1}`",
+        f"All chunks have the same vector length: `{len(set(dimensions)) == 1}`",
         "",
-        "## Sample vectors",
+        "## Stored chunks and vectors",
         "",
     ]
-    for text, vector in zip(texts, vectors):
-        lines.extend([f"- **Text:** {text}", f"  **Vector:** `{json.dumps(list(vector))}`"])
+    for record in stored_records:
+        trimmed_vector = record["embedding"][:5]
+        lines.extend(
+            [
+                f"- **Text:** {record['text']}",
+                f"  **Metadata:** `{json.dumps(record['metadata'], sort_keys=True)}`",
+                f"  **Vector length:** `{len(record['embedding'])}`",
+                f"  **Vector values (first 5):** `{json.dumps(trimmed_vector)}`",
+            ]
+        )
     lines.extend(
         [
             "",
@@ -94,15 +136,35 @@ def build_report(provider: str, texts: Sequence[str], vectors: Sequence[Sequence
     return "\n".join(lines)
 
 
+def validate_dimension(vectors: Sequence[Sequence[float]], expected: str | None) -> int:
+    """Confirm one returned dimension and, when configured, the expected dimension."""
+    dimensions = {len(vector) for vector in vectors}
+    if len(dimensions) != 1:
+        raise ValueError("The embeddings API returned inconsistent vector dimensions")
+    dimension = dimensions.pop()
+    if expected and dimension != int(expected):
+        raise ValueError(f"Expected vector dimension {expected}, received {dimension}")
+    return dimension
+
+
 def main() -> None:
     client = None
-    if os.getenv("OPENAI_API_KEY"):
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
+    embedding_model = os.getenv("EMBEDDING_MODEL")
+    if api_key:
         from openai import OpenAI
 
-        client = OpenAI()
+        client_kwargs = {"api_key": api_key}
+        api_base_url = os.getenv("OPENAI_BASE_URL") or os.getenv("API_BASE_URL")
+        if api_base_url:
+            client_kwargs["base_url"] = api_base_url
+        client = OpenAI(**client_kwargs)
 
-    provider, vectors = generate_embeddings(SAMPLE_TEXTS, client=client)
-    report = build_report(provider, SAMPLE_TEXTS, vectors)
+    provider, vectors = generate_embeddings(
+        SAMPLE_TEXTS, client=client, model=embedding_model
+    )
+    validate_dimension(vectors, os.getenv("EMBEDDING_DIMENSION"))
+    report = build_report(provider, SAMPLE_CORPUS, vectors)
     output_path = Path(os.getenv("EMBEDDING_OUTPUT", "outputs/embedding_demo.md"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
