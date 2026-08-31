@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-08-31T10:15:30.123456",
+  "total_chunks": 3,
+  "skipped_existing": 0,
+  "embedded": 3,
+  "failed": 0,
+  "input_tokens_used": 89,
+  "estimated_cost_usd": 0.00178,
+  "batch_size": 64,
+  "total_batches": 1,
+  "successful_batches": 1,
+  "failed_batches": 0,
+  "failed_chunk_ids": [],
+  "duration_seconds": 2.34,
+  "model": "text-embedding-3-small",
+  "run_errors": []
+}
