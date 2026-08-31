@@ -65,3 +65,15 @@ def test_query_ranks_chunks_with_scores_and_metadata():
     assert rankings[0]["metadata"]["section"] == "Dosage"
     assert rankings[-1]["metadata"]["section"] == "Account access"
     assert rankings[0]["score"] > rankings[-1]["score"]
+
+
+def test_known_relevance_cases_rank_related_chunks_above_unrelated_ones():
+    from src.retrieval_quality_check import KNOWN_CASES, evaluate_case
+
+    assert len(KNOWN_CASES) >= 3
+
+    outcomes = [evaluate_case(case) for case in KNOWN_CASES]
+
+    assert all(result["related_above_unrelated"] for result in outcomes)
+    assert all(result["expected_top_ranked"] for result in outcomes)
+    assert all(result["top_result"]["source_document"] == case["expected_top"]["source_document"] for result, case in zip(outcomes, KNOWN_CASES))
