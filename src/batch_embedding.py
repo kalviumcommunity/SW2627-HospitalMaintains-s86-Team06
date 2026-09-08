@@ -171,7 +171,11 @@ class BatchEmbeddingPipeline:
         """
         load_dotenv()
 
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
+        self.api_key = (
+            api_key
+            if api_key is not None
+            else (os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY") or "")
+        )
         self.base_url = base_url or os.getenv("OPENAI_BASE_URL") or os.getenv("API_BASE_URL")
         self.model = model
         self.batch_size = batch_size

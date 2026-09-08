@@ -95,3 +95,18 @@ def test_top_k_results_change_when_k_changes():
     assert len(top_three) == 3
     assert top_two[0]["text"] == top_three[0]["text"]
     assert top_two[-1]["text"] != top_three[-1]["text"]
+
+
+def test_known_relevance_cases_rank_related_chunks_above_unrelated_ones():
+    from src.retrieval_quality_check import KNOWN_CASES, evaluate_case
+
+    assert len(KNOWN_CASES) >= 3
+
+    outcomes = [evaluate_case(case) for case in KNOWN_CASES]
+
+    assert all(result["related_above_unrelated"] for result in outcomes)
+    assert all(result["expected_top_ranked"] for result in outcomes)
+    assert all(
+        result["top_result"]["source_document"] == case["expected_top"]["source_document"]
+        for result, case in zip(outcomes, KNOWN_CASES)
+    )
