@@ -8,7 +8,7 @@ and hybrid ranking (combining semantic vector similarity with lexical keyword ma
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
 from src.embedding_demo import (
     OFFLINE_QUERY_VECTOR,
@@ -16,7 +16,8 @@ from src.embedding_demo import (
     TextChunk,
     cosine_similarity,
 )
-from src.vector_db import VectorCollection
+if TYPE_CHECKING:
+    from src.vector_db import VectorCollection
 
 logger = logging.getLogger(__name__)
 
