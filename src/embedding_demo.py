@@ -102,6 +102,82 @@ def rank_chunks(
     return sorted(ranked, key=lambda result: result["score"], reverse=True)
 
 
+def embed_query(
+    query: str, client: Any | None = None, model: str | None = None
+) -> tuple[str, list[float]]:
+    """Embed a user query with the same model used for the document chunks."""
+    provider, vectors = generate_embeddings([query], client=client, model=model)
+    return provider, vectors[0]
+
+
+def top_k_similarity_search(
+    query_embedding: Sequence[float], records: Sequence[dict[str, Any]], k: int = 3
+) -> list[dict[str, Any]]:
+    """Return the k most similar chunks with scores and metadata."""
+    if k <= 0:
+        raise ValueError("k must be a positive integer")
+    ranked = rank_chunks(query_embedding, records)
+    return ranked[:k]
+
+
+def build_retrieval_report(
+    provider: str,
+    corpus: Sequence[TextChunk],
+    vectors: Sequence[Sequence[float]],
+    query: str = SAMPLE_QUERY,
+    query_embedding: Sequence[float] | None = None,
+    k_values: Sequence[int] = (1, 3),
+) -> str:
+    """Build a retrieval demo report showing the same query at different k values."""
+    stored_records = store_embeddings(corpus, vectors)
+    if query_embedding is None:
+        _, query_vector = embed_query(query)
+        query_embedding = query_vector
+
+    lines = [
+        "# Similarity Search & Top-k Retrieval",
+        "",
+        f"Provider: `{provider}`",
+        f"Embedding model: `same as document chunks`",
+        f"Query: **{query}**",
+        "",
+        "## Query embedding",
+        "",
+        "The user query is embedded with the same model and vector space as the document chunks, so cosine "
+        "similarity compares compatible representations.",
+        "",
+        f"Query embedding length: `{len(query_embedding)}`",
+        "",
+        "## Top-k similarity search",
+        "",
+    ]
+
+    for k in k_values:
+        results = top_k_similarity_search(query_embedding, stored_records, k=k)
+        lines.extend([f"### k = {k}", ""])
+        for index, result in enumerate(results, 1):
+            lines.extend(
+                [
+                    f"{index}. **Score:** `{result['score']:.6f}`",
+                    f"   **Text:** {result['text']}",
+                    f"   **Metadata:** `{json.dumps(result['metadata'], sort_keys=True)}`",
+                ]
+            )
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Interpretation",
+            "",
+            "- A larger k returns more candidate chunks, which improves recall but may dilute the answer with less relevant context.",
+            "- A smaller k gives tighter, higher-precision context but risks missing useful supporting passages.",
+            "- The full query answer should later use the retrieved chunks as grounded context for the model.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def build_report(
     provider: str,
     corpus: Sequence[TextChunk],
@@ -224,8 +300,16 @@ def main() -> None:
     output_path = Path(os.getenv("EMBEDDING_OUTPUT", "outputs/embedding_demo.md"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
+    retrieval_report = build_retrieval_report(
+        provider, SAMPLE_CORPUS, vectors, query_embedding=query_vectors[0], k_values=(1, 3)
+    )
+    retrieval_output_path = Path(os.getenv("RETRIEVAL_OUTPUT", "outputs/top_k_retrieval_demo.md"))
+    retrieval_output_path.parent.mkdir(parents=True, exist_ok=True)
+    retrieval_output_path.write_text(retrieval_report, encoding="utf-8")
     print(report)
     print(f"Saved report to {output_path}")
+    print(retrieval_report)
+    print(f"Saved retrieval report to {retrieval_output_path}")
 
 
 if __name__ == "__main__":

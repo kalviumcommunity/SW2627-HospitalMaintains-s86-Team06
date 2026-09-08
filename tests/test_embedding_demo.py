@@ -4,9 +4,11 @@ from src.embedding_demo import (
     SAMPLE_TEXTS,
     build_report,
     cosine_similarity,
+    embed_query,
     generate_embeddings,
     store_embeddings,
     rank_chunks,
+    top_k_similarity_search,
 )
 
 
@@ -67,6 +69,34 @@ def test_query_ranks_chunks_with_scores_and_metadata():
     assert rankings[0]["score"] > rankings[-1]["score"]
 
 
+def test_embed_query_and_top_k_similarity_search_include_scores_and_metadata():
+    _, vectors = generate_embeddings(SAMPLE_TEXTS)
+    records = store_embeddings(SAMPLE_CORPUS, vectors)
+
+    provider, query_vector = embed_query(SAMPLE_QUERY)
+    results = top_k_similarity_search(query_vector, records, k=2)
+
+    assert provider == "offline semantic fixture"
+    assert len(results) == 2
+    assert all("score" in result and "text" in result and "metadata" in result for result in results)
+    assert results[0]["metadata"]["source_document"] == "medication-guideline.pdf"
+    assert results[0]["score"] >= results[1]["score"]
+
+
+def test_top_k_results_change_when_k_changes():
+    _, vectors = generate_embeddings(SAMPLE_TEXTS)
+    records = store_embeddings(SAMPLE_CORPUS, vectors)
+    _, query_vector = embed_query(SAMPLE_QUERY)
+
+    top_two = top_k_similarity_search(query_vector, records, k=2)
+    top_three = top_k_similarity_search(query_vector, records, k=3)
+
+    assert len(top_two) == 2
+    assert len(top_three) == 3
+    assert top_two[0]["text"] == top_three[0]["text"]
+    assert top_two[-1]["text"] != top_three[-1]["text"]
+
+
 def test_known_relevance_cases_rank_related_chunks_above_unrelated_ones():
     from src.retrieval_quality_check import KNOWN_CASES, evaluate_case
 
@@ -76,4 +106,7 @@ def test_known_relevance_cases_rank_related_chunks_above_unrelated_ones():
 
     assert all(result["related_above_unrelated"] for result in outcomes)
     assert all(result["expected_top_ranked"] for result in outcomes)
-    assert all(result["top_result"]["source_document"] == case["expected_top"]["source_document"] for result, case in zip(outcomes, KNOWN_CASES))
+    assert all(
+        result["top_result"]["source_document"] == case["expected_top"]["source_document"]
+        for result, case in zip(outcomes, KNOWN_CASES)
+    )
