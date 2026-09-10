@@ -21,6 +21,7 @@ from src.embedding_demo import (
     store_embeddings,
     top_k_similarity_search,
 )
+from src.source_citations import build_citations
 
 
 @dataclass(frozen=True)
@@ -109,7 +110,8 @@ def generate_answer(
 
     # Deterministic offline generation keeps the end-to-end demonstration runnable.
     selected_sources = sources[: augmented_prompt.included_sources]
-    source_labels = ", ".join(f"[{index}]" for index in range(1, len(selected_sources) + 1))
+    citations = build_citations(selected_sources)
+    source_labels = ", ".join(citation.marker for citation in citations)
     evidence = " ".join(source.text for source in selected_sources)
     return f"Based on the indexed documents, {evidence} ({source_labels})."
 
