@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+from src.context_assembly import build_augmented_prompt
 from src.embedding_demo import (
     SAMPLE_CORPUS,
     SAMPLE_QUERY,
@@ -80,10 +81,19 @@ def generate_answer(
     sources: Sequence[RetrievedSource],
     chat_client: Any | None = None,
     chat_model: str | None = None,
+    model_token_budget: int = 256,
+    reserved_answer_tokens: int = 64,
 ) -> str:
     """Generate a grounded answer, or decline when retrieval found nothing."""
     if not sources or not context.strip():
         return "I could not find supporting information in the indexed documents."
+
+    augmented_prompt = build_augmented_prompt(
+        query,
+        sources,
+        model_token_budget=model_token_budget,
+        reserved_answer_tokens=reserved_answer_tokens,
+    )
 
     if chat_client is not None:
         if not chat_model:
@@ -91,23 +101,16 @@ def generate_answer(
         response = chat_client.chat.completions.create(
             model=chat_model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Answer only from the supplied context. If the context does not "
-                        "support an answer, say so. Cite sources as [Source N]."
-                    ),
-                },
-                {"role": "user", "content": f"Question: {query}\n\nContext:\n{context}"},
+                {"role": "system", "content": augmented_prompt.system_message},
+                {"role": "user", "content": augmented_prompt.user_message},
             ],
         )
         return response.choices[0].message.content
 
     # Deterministic offline generation keeps the end-to-end demonstration runnable.
-    source_labels = ", ".join(
-        f"[Source {index}]" for index in range(1, len(sources) + 1)
-    )
-    evidence = " ".join(source.text for source in sources)
+    selected_sources = sources[: augmented_prompt.included_sources]
+    source_labels = ", ".join(f"[{index}]" for index in range(1, len(selected_sources) + 1))
+    evidence = " ".join(source.text for source in selected_sources)
     return f"Based on the indexed documents, {evidence} ({source_labels})."
 
 
