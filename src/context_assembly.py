@@ -32,6 +32,13 @@ class AugmentedPrompt:
         """Return prompt tokens plus the answer allowance."""
         return self.prompt_tokens + self.reserved_answer_tokens
 
+    def to_messages(self) -> list[dict[str, str]]:
+        """Convert the augmented prompt into chat-completions messages."""
+        return [
+            {"role": "system", "content": self.system_message},
+            {"role": "user", "content": self.user_message},
+        ]
+
 
 def _source_block(index: int, source: Any) -> str:
     filename = source.metadata.get("source_document", "unknown source")
