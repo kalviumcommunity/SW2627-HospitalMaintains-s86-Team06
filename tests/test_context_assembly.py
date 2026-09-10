@@ -58,3 +58,13 @@ def test_small_sources_fit_and_accounting_is_explicit():
     assert prompt.included_sources == 1
     assert prompt.prompt_tokens + prompt.reserved_answer_tokens <= 100
     assert prompt.system_message == GROUNDING_INSTRUCTIONS
+
+
+def test_augmented_prompt_converts_to_chat_messages():
+    source = RetrievedSource("Use water.", {"source_document": "guide.pdf"}, 0.9)
+
+    messages = build_augmented_prompt("What should the patient use?", [source]).to_messages()
+
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert messages[0]["content"] == GROUNDING_INSTRUCTIONS
+    assert "[1] guide.pdf" in messages[1]["content"]
