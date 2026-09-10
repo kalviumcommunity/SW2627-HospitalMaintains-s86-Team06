@@ -22,6 +22,7 @@ from src.embedding_demo import (
     top_k_similarity_search,
 )
 from src.source_citations import build_citations
+from src.hallucination_guardrails import SAFE_REFUSAL, evaluate_retrieval
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,8 @@ class RagResponse:
     answer: str
     sources: list[RetrievedSource]
     embedding_provider: str
+    refused: bool = False
+    refusal_reason: str | None = None
 
 
 def embed_query_stage(
@@ -138,6 +141,8 @@ def run_rag_pipeline(
     chat_client: Any | None = None,
     chat_model: str | None = None,
     k: int = 2,
+    minimum_score: float = 0.75,
+    minimum_chunks: int = 1,
 ) -> RagResponse:
     """Run embed -> retrieve -> assemble -> generate and return sources."""
     if indexed_records is None:
@@ -154,6 +159,20 @@ def run_rag_pipeline(
         embedding_model=embedding_model,
     )
     sources = retrieve_stage(query_embedding, indexed_records, k=k)
+    retrieval_decision = evaluate_retrieval(
+        sources,
+        minimum_score=minimum_score,
+        minimum_chunks=minimum_chunks,
+    )
+    if not retrieval_decision.allowed:
+        return RagResponse(
+            query=query,
+            answer=SAFE_REFUSAL,
+            sources=sources,
+            embedding_provider=provider or embedding_provider,
+            refused=True,
+            refusal_reason=retrieval_decision.reason,
+        )
     context = assemble_context(sources)
     answer = generate_answer(
         query,
